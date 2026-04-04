@@ -2,7 +2,7 @@ name: Deploy Laravel API
 
 on:
   push:
-    branches: [ main ] # Ou a sua branch principal (ex: master)
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -38,14 +38,27 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true 
           script: |
             cd /var/www/thestarart-api
-            # Ajuste de permissões para o Laravel
+            
+            # Garante que o diretório existe e as pastas de escrita também
+            mkdir -p storage/framework/{sessions,views,cache}
+            mkdir -p bootstrap/cache
+
+            # Ajuste de permissões (silencioso para não encher o log)
             chown -R www-data:www-data storage bootstrap/cache
             chmod -R 775 storage bootstrap/cache
             
-            # Comandos do Laravel
-            php artisan migrate --force
+            # Comandos do Laravel com flags de não-interação
+            # O --force é vital para rodar migrations em produção
+            php artisan migrate --force --no-interaction
+            
+            # Limpa caches antes de gerar novos para evitar conflitos de caminhos antigos
+            php artisan config:clear
+            php artisan route:clear
+            
+            # Gera os caches de performance
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
