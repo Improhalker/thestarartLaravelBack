@@ -1,0 +1,51 @@
+name: Deploy Laravel API
+
+on:
+  push:
+    branches: [ main ] # Ou a sua branch principal (ex: master)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, xml, curl, zip, intl
+
+      - name: Instalar Dependências (Composer)
+        run: composer install --no-dev --optimize-autoloader --no-progress --no-interaction
+
+      - name: Deploy via SSH (Rsync)
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --delete"
+          SOURCE: "/"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: "/var/www/thestarart-api"
+          EXCLUDE: "/node_modules/, /tests/, /storage/logs/, .env, .git/"
+
+      - name: Comandos Pós-Deploy na VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/thestarart-api
+            # Ajuste de permissões para o Laravel
+            chown -R www-data:www-data storage bootstrap/cache
+            chmod -R 775 storage bootstrap/cache
+            
+            # Comandos do Laravel
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
